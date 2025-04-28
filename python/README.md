@@ -25,7 +25,7 @@ This Python application creates a terminal interface for chatting with Claude 3.
 
 ## Available Tools
 
-The application defines three tools that Claude can use:
+The application defines four tools that Claude can use:
 
 1. **read_file**: Reads and returns the contents of a specified file
    - Input: A relative file path
@@ -40,12 +40,28 @@ The application defines three tools that Claude can use:
    - Can create new files if they don't exist
    - Can replace text in existing files
 
+4. **run_terminal_command**: Executes terminal commands on the local system
+   - Input: A command string to execute
+   - Output: JSON object containing return code, stdout, and stderr
+   - Has built-in safety checks to prevent execution of potentially dangerous commands
+   - Command execution is limited to 30 seconds
+
 ## Usage
 
 1. Run the application
 2. Type messages to Claude in the terminal
 3. When Claude wants to use a tool, it will show the tool call and result
 4. Continue the conversation based on Claude's responses
+
+## Security Notice
+
+The terminal command execution feature executes commands with the same permissions as the user running the application. To mitigate potential risks, the implementation includes:
+
+1. A blocklist of potentially dangerous commands
+2. A 30-second timeout for all commands
+3. Output capturing to prevent disruption of the application
+
+Use this feature with caution and be aware of the commands being executed.
 
 ## Requirements
 

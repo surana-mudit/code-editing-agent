@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import re
+import subprocess
 from pathlib import Path
 import readline  # Enables better CLI input experience
 from typing import Dict, List, Callable, Any, Optional, Union, Tuple
@@ -28,7 +29,8 @@ class Agent:
         self.tool_functions = {
             "read_file": read_file,
             "list_files": list_files,
-            "edit_file": edit_file
+            "edit_file": edit_file,
+            "run_terminal_command": run_terminal_command
         }
 
     def run(self):
@@ -202,6 +204,62 @@ def edit_file(input_data: Dict) -> str:
     except Exception as e:
         return str(e)
 
+def run_terminal_command(input_data: Dict) -> str:
+    """Execute a terminal command and return its output."""
+    if "command" not in input_data:
+        return "Command parameter is required"
+    
+    command = input_data["command"]
+    
+    # Basic security check to prevent potentially dangerous commands
+    dangerous_commands = [
+        "rm -rf", "sudo", ":(){:|:&};:", "dd", "mkfs", 
+        "wget", "curl", "--help > /dev/null", "> /dev/null",
+        "mv /* ", "chmod -R 777"
+    ]
+    
+    for dangerous_cmd in dangerous_commands:
+        if dangerous_cmd in command:
+            return f"Potentially dangerous command detected: '{dangerous_cmd}'. Execution denied for safety."
+    
+    try:
+        # Execute the command and capture output
+        process = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=30  # Timeout after 30 seconds
+        )
+        
+        # Format the response
+        return_code = process.returncode
+        stdout = process.stdout.strip()
+        stderr = process.stderr.strip()
+        
+        result = {
+            "return_code": return_code,
+            "stdout": stdout,
+            "stderr": stderr
+        }
+        
+        return json.dumps(result)
+    
+    except subprocess.TimeoutExpired:
+        return json.dumps({
+            "error": "Command execution timed out after 30 seconds",
+            "return_code": -1,
+            "stdout": "",
+            "stderr": "Timeout"
+        })
+    except Exception as e:
+        return json.dumps({
+            "error": str(e),
+            "return_code": -1,
+            "stdout": "",
+            "stderr": str(e)
+        })
+
 # Tool definitions with their schemas
 READ_FILE_TOOL = {
     "type": "function",
@@ -264,6 +322,24 @@ EDIT_FILE_TOOL = {
     }
 }
 
+RUN_TERMINAL_COMMAND_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "run_terminal_command",
+        "description": "Execute a terminal command and return its output. Use with caution as this executes commands on the user's system.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "The terminal command to execute"
+                }
+            },
+            "required": ["command"]
+        }
+    }
+}
+
 def main():
     # Check for OpenRouter API key
     api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -287,7 +363,7 @@ def main():
             return "", False
     
     # Define tools
-    tools = [READ_FILE_TOOL, LIST_FILES_TOOL, EDIT_FILE_TOOL]
+    tools = [READ_FILE_TOOL, LIST_FILES_TOOL, EDIT_FILE_TOOL, RUN_TERMINAL_COMMAND_TOOL]
     
     # Create agent and run conversation
     agent = Agent(client, get_user_message, tools)
